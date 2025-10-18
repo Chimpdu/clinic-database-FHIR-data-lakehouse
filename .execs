@@ -1,0 +1,7 @@
+# configures which files should be executable (will also make sure they are LF terminated)
+# this is only here to solve the issues of NTFS (windows)
+python-lakehouse/*.py
+!python-lakehouse/session.py
+scripts/*.sh
+kthcloudw
+.devcontainer/scripts/*.sh

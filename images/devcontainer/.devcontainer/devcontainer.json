@@ -1,0 +1,36 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+    "name": "HUDI devcontainer",
+    // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+    "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+    // Features to add to the dev container. More info: https://containers.dev/features.
+    "features": {
+        // JVM is needed for pyspark
+        "ghcr.io/devcontainers/features/java:1": {
+            "version": "17.0.4.1-tem",
+            "installMaven": "true",
+            "installGradle": "false"
+        },
+        "ghcr.io/devcontainers/features/python:1": {
+            "version": "3.9"
+        },
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+        "ghcr.io/devcontainers/features/go": {}
+    },
+    "containerEnv": {
+        "JAVA_TOOL_OPTIONS": "-XX:+IgnoreUnrecognizedVMOptions -XX:+UseParallelGC -XX:-UseContainerSupport --add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
+        "NS_PREFIX": ""
+    },
+    "runArgs": [
+        "--add-host=namenode:127.0.0.1"
+    ],
+    // Use 'forwardPorts' to make a list of ports inside the container available locally.
+    // "forwardPorts": [],
+    // Use 'postCreateCommand' to run commands after the container is created.
+    "postCreateCommand": "bash -c '{ cd .devcontainer && go run ./cmd/ensure-exec; go run ./cmd/ensure-lf; sudo cp ./scripts/xdg-open /usr/bin/xdg-open; }' & { pip3 install --user -r requirements.txt; }"
+    // Configure tool-specific properties.
+    // "customizations": {},
+    // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+    // "remoteUser": "root"
+}

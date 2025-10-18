@@ -1,0 +1,5 @@
+derby.log
+metastore_db
+spark-warehouse
+hudi-ws/*
+.kthcloud-ns

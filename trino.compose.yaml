@@ -1,0 +1,48 @@
+x-trino-names:
+  trino-coordinator-1: &trino-coordinator-1 "${NS_PREFIX}${TRINO_COORDINATOR_1:-trino-coordinator-1}"
+  trino-worker-1: &trino-worker-1 "${NS_PREFIX}${TRINO_WORKER_1:-trino-worker-1}"
+
+services:
+  trino-coordinator-1:
+    image: ghcr.io/cm2027/lab3-datalake/trino-hudi:main
+    #build: ./images/trino/.
+    container_name: *trino-coordinator-1
+    hostname: *trino-coordinator-1
+    environment:
+      - TRINO_CATALOG_HIVE_HIVE_METASTORE_URI=thrift://${NS_PREFIX}${HIVEMETASTORE:-hivemetastore}:9083
+      - TRINO_CONFIG_DISCOVERY_URI=http://${NS_PREFIX}${TRINO_COORDINATOR_1:-trino-coordinator-1}:8080
+      - TRINO_CONFIG_HTTP__SERVER_HTTP_PORT=8080
+      - TRINO_CONFIG_NODE__SCHEDULER_INCLUDE__COORDINATOR=true
+      - TRINO_CONFIG_COORDINATOR=true
+    ports:
+      - "8091:8080"
+    volumes:
+      - ./conf/trino/catalog/:/etc/trino/catalog/
+      # mounting files isnt supported by kthcloud cli
+      #- ./conf/trino/coordinator/config.properties:/etc/trino/config.properties
+    links:
+      - hivemetastore
+
+  trino-worker-1:
+    image: ghcr.io/cm2027/lab3-datalake/trino-hudi:main
+    #build: ./images/trino/.
+    container_name: *trino-worker-1
+    hostname: *trino-worker-1
+    environment:
+      - TRINO_CATALOG_HIVE_HIVE_METASTORE_URI=thrift://${NS_PREFIX}${HIVEMETASTORE:-hivemetastore}:9083
+      - TRINO_CONFIG_DISCOVERY_URI=http://${NS_PREFIX}${TRINO_COORDINATOR_1:-trino-coordinator-1}:8080
+      - TRINO_CONFIG_HTTP__SERVER_HTTP_PORT=8080
+      - TRINO_CONFIG_COORDINATOR=false
+    ports:
+      - "8092:8080"
+    depends_on:
+      - trino-coordinator-1
+    volumes:
+      - ./conf/trino/catalog/:/etc/trino/catalog/
+      # mounting files isnt supported by kthcloud cli
+      #- ./conf/trino/worker/config.properties:/etc/trino/config.properties
+    links:
+      - hivemetastore
+      - hiveserver
+      - hive-metastore-db
+      - namenode

@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+set -e
+
+PROGRAM="kthcloud"
+NS_FILE=".kthcloud-ns"
+
+[[ -z "${__logging__dot__sh:-}" ]] && {
+    RED="\e[31m";
+    YELLOW="\e[33m";
+    GREEN="\e[32m";
+    BLUE="\e[34m";
+    GRAY="\e[90m";
+    RESET="\e[0m";
+    ERROR_LOG="${RED}[ERROR]${RESET}";
+    WARN_LOG="${YELLOW}[WARN]${RESET}";
+    INFO_LOG="${GREEN}[INFO]${RESET}";
+    PRINT_INDENT_LOG="${GRAY}||===>${RESET}";
+    log_err() { echo -e "$ERROR_LOG $1" >&2; }
+    log_warn() { echo -e "$WARN_LOG $1" >&2; }
+    log_info() { echo -e "$INFO_LOG $1" >&2; }
+    log_print() { echo -e "$PRINT_INDENT_LOG $1" >&2; }
+    readonly __logging__dot__sh=1;
+}
+
+check_dependencies() {
+  missing_deps=()
+  for cmd in "$@"; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      missing_deps+=("$cmd")
+    fi
+  done
+
+  if [ ${#missing_deps[@]} -ne 0 ]; then
+    echo -e "$ERROR_LOG Missing dependencies: ${missing_deps[*]}" >&2
+    exit 1
+  fi
+}
+
+if ! command -v "$PROGRAM" >/dev/null 2>&1; then
+    log_warn "'$PROGRAM' not found."
+    read -rp "Do you want to download it? (y/N): " yn
+    case "$yn" in
+        [Yy]*)
+            check_dependencies "curl" || { log_err "The installation requires curl, please install curl"; exit 1; }
+
+            log_info "Downloading $PROGRAM..."
+            curl -fsSL https://raw.githubusercontent.com/Phillezi/kthcloud-cli/main/scripts/install.sh | bash
+            source ~/.bashrc || { log_err "Failed to source ~/.bashrc"; exit 1;}
+            log_info "Installed $PROGRAM successfully."
+            ;;
+        *)
+            log_err "$PROGRAM is required. Aborting."
+            exit 1
+            ;;
+    esac
+fi
+
+if ! command -v "$PROGRAM" >/dev/null 2>&1; then
+  log_err "Could not use $PROGRAM on your system. Plz source your ~/.bashrc file or add $HOME/.local/kthcloud/bin to your path to resolve this, then re-run this script.\nTLDR;\n\tsource ~/.bashrc; !!"
+  exit 1
+fi
+
+if [[ ! -f "$NS_FILE" ]]; then
+    log_info "Creating namespace file: $NS_FILE"
+
+    check_dependencies "awk" "xargs" || { log_err "The wrapper script needs this to extract your username from your email address"; exit 1; }
+
+    email=$(kthcloud whoami | awk -F': *' '/^Email/ {print $2}' | xargs)
+    ns="${email%@*}-"
+
+    if [[ -z "$ns" || "$ns" == "-" ]]; then
+      log_info "Could not determine namespace. Are you logged in? (run 'kthcloud login')"
+      kthcloud login || { log_err "Could not login"; exit 1; }
+      email=$(kthcloud whoami | awk -F': *' '/^Email/ {print $2}' | xargs)
+      ns="${email%@*}-"
+    fi
+
+    echo "export NS_PREFIX=\"$ns\"" > "$NS_FILE"
+    log_info "Saved namespace as '$ns'."
+else
+    log_info "Namespace file already exists. Skipping setup." >&2
+fi
+
+
+source "$NS_FILE"
+
+exec "$PROGRAM" "$@"

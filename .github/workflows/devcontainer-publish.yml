@@ -1,0 +1,122 @@
+name: Devcontainer
+
+on:
+  push:
+    branches: ["main", "devcontainer-image"]
+    tags: ["v*.*.*"]
+    paths:
+      - "images/devcontainer/**"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/devcontainer
+
+jobs:
+
+  # docker moby feature doesnt work when cross compiling... 
+  # https://github.com/devcontainers/features/issues/219
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runs_on: ubuntu-latest
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs_on }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Set up BuildKit Docker container builder to be able to build
+      # multi-platform images and export cache
+      # https://github.com/docker/setup-buildx-action
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
+
+      # Login against a Docker registry except on PR
+      # https://github.com/docker/login-action
+      - name: Log into registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+
+      - name: Install Dev Container CLI
+        run: npm install -g @devcontainers/cli
+
+      - name: Build Dev Container image
+        id: build
+        run: |
+          cd images/devcontainer
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}-${{ matrix.arch }}"
+
+          echo "Building architecture ${{ matrix.arch }} -> $IMAGE_TAG"
+          devcontainer build \
+            --workspace-folder . \
+            --platform=linux/${{ matrix.arch }} \
+            --image-name $IMAGE_TAG \
+            --push \
+            --cache-from=type=gha \
+            --cache-to=type=gha,mode=max
+
+
+  # -----------------------
+  # Combine into multi-arch manifest
+  # -----------------------
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+
+      # Login against a Docker registry except on PR
+      # https://github.com/docker/login-action
+      - name: Log into registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      # Set up BuildKit Docker container builder to be able to build
+      # multi-platform images and export cache
+      # https://github.com/docker/setup-buildx-action
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
+
+      - name: Import images and create multi-arch manifest
+        run: |
+          TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+
+          echo "Creating multi-arch manifest: $FINAL_TAG"
+          docker buildx imagetools create \
+            --tag $TAG \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}-amd64" \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}-arm64"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.5.0
+        with:
+          cosign-release: "v2.2.4"
+
+      - name: Sign multi-arch manifest
+        run: |
+          TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+          cosign sign --yes $TAG

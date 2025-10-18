@@ -1,0 +1,5 @@
+include:
+  - base.compose.yaml
+  - hive.compose.yaml
+  - spark.compose.yaml
+  - trino.compose.yaml

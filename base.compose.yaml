@@ -1,0 +1,84 @@
+x-base-names:
+  namenode: &namenode "${NS_PREFIX}${NAMENODE:-namenode}"
+  datanode1: &datanode1 "${NS_PREFIX}${DATANODE1:-datanode1}"
+  historyserver: &historyserver "${NS_PREFIX}${HISTORYSERVER:-historyserver}"
+
+services:
+
+  namenode:
+    image: apachehudi/hudi-hadoop_2.8.4-namenode:latest
+    hostname: *namenode
+    container_name: *namenode
+    environment:
+      - CLUSTER_NAME=hudi_minimal
+    env_file:
+      - ./hadoop.env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${NS_PREFIX}${NAMENODE:-namenode}.rule=Host(`namenode.localhost`)"
+      - "traefik.http.services.${NS_PREFIX}${NAMENODE:-namenode}.loadbalancer.server.port=50070"
+    ports:
+      - "8020:8020" # HDFS NameNode IPC
+      - "9000:9000" # HDFS NameNode Client
+      - "50070:50070" # HDFS NameNode Web UI
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://${NS_PREFIX}${NAMENODE:-namenode}:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  datanode1:
+    image: apachehudi/hudi-hadoop_2.8.4-datanode:latest
+    hostname: *datanode1
+    container_name: *datanode1
+    environment:
+      - CLUSTER_NAME=hudi_minimal
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - namenode
+    links:
+      - "namenode"
+      - "historyserver"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://${NS_PREFIX}${DATANODE1:-datanode1}:9864"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ports:
+      - "9864:9864"   # HDFS DataNode Web UI
+      - "50010:50010" # HDFS DataNode IPC
+      - "50075:50075" # HDFS DataNode HTTP
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${NS_PREFIX}${DATANODE1:-datanode1}.rule=Host(`datanode.localhost`)"
+      - "traefik.http.services.${NS_PREFIX}${DATANODE1:-datanode1}.loadbalancer.server.port=50075"
+    volumes:
+      - datanode:/hadoop/dfs/data
+  
+  historyserver:
+    image: apachehudi/hudi-hadoop_2.8.4-history:latest
+    hostname: *historyserver
+    container_name: *historyserver
+    environment:
+      - CLUSTER_NAME=hudi_hadoop334_hive313_spark353
+    depends_on:
+      - namenode
+    links:
+      - namenode
+    ports:
+      - "8188:8188" # MapReduce JobHistory Server Port
+      - "19888:19888" # MapReduce JobHistory Server's web UI
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://${NS_PREFIX}${HISTORYSERVER:-historyserver}:8188"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - historyserver:/hadoop/yarn/timeline
+
+volumes:
+  datanode:
+  historyserver:

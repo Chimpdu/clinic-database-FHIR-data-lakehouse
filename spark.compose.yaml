@@ -1,0 +1,44 @@
+x-spark-names:
+  sparkmaster: &sparkmaster "${NS_PREFIX}${SPARKMASTER:-sparkmaster}"
+  spark-worker-1: &spark-worker-1 "${NS_PREFIX}${SPARK_WORKER_1:-spark-worker-1}"
+
+services:
+
+  sparkmaster:
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_3.5.3:latest
+    hostname: *sparkmaster
+    container_name: *sparkmaster
+    env_file:
+      - ./hadoop.env
+    environment:
+      - INIT_DAEMON_STEP=setup_spark
+      - SPARK_LOCAL_IP=${NS_PREFIX}${SPARKMASTER:-sparkmaster}
+      - SPARK_DRIVER_HOST=${NS_PREFIX}${SPARKMASTER:-sparkmaster}
+      - SPARK_DRIVER_BIND_ADDRESS=0.0.0.0
+    depends_on:
+      - hivemetastore
+      - hiveserver
+      - namenode
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${NS_PREFIX}${SPARKMASTER:-sparkmaster}.rule=Host(`sparkmaster.localhost`)"
+      - "traefik.http.services.${NS_PREFIX}${SPARKMASTER:-sparkmaster}.loadbalancer.server.port=8080"
+    ports:
+      - 8080:8080
+      - 7077:7077
+
+  spark-worker-1:
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_3.5.3:latest
+    hostname: *spark-worker-1
+    container_name: *spark-worker-1
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - sparkmaster
+    environment:
+      - SPARK_MASTER=spark://${NS_PREFIX}${SPARKMASTER:-sparkmaster}:7077
+      - SPARK_MASTER_URL=spark://${NS_PREFIX}${SPARKMASTER:-sparkmaster}:7077
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${NS_PREFIX}${SPARK_WORKER_1:-spark-worker-1}.rule=Host(`sparkworker.localhost`)"
+      - "traefik.http.services.${NS_PREFIX}${SPARK_WORKER_1:-spark-worker-1}.loadbalancer.server.port=8081"

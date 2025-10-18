@@ -1,0 +1,51 @@
+x-hive-names:
+  hive-metastore-db: &hive-metastore-db "${NS_PREFIX}${HIVE_METASTORE_POSTGRESQL:-hive-metastore-db}"
+  hivemetastore: &hivemetastore "${NS_PREFIX}${HIVEMETASTORE:-hivemetastore}"
+  hiveserver: &hiveserver "${NS_PREFIX}${HIVESERVER:-hiveserver}"
+
+services:
+
+  hive-metastore-db:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    container_name: *hive-metastore-db
+    volumes:
+      - hive-metastore-db:/var/lib/postgresql
+    labels:
+      - "traefik.enable=false"
+
+  hivemetastore:
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
+    hostname: *hivemetastore
+    container_name: *hivemetastore
+    env_file:
+      - ./hadoop.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_PRECONDITION: "${NS_PREFIX}${NAMENODE:-namenode}:50070 ${NS_PREFIX}${HIVE_METASTORE_POSTGRESQL:-hive-metastore-db}:5432"
+    depends_on:
+      - hive-metastore-db
+      - namenode
+    ports:
+      - 9083:9083
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${NS_PREFIX}${HIVEMETASTORE:-hivemetastore}.rule=Host(`hivemetastore.localhost`)"
+      - "traefik.http.services.${NS_PREFIX}${HIVEMETASTORE:-hivemetastore}.loadbalancer.server.port=9083"
+
+  hiveserver:
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
+    hostname: *hiveserver
+    container_name: *hiveserver
+    env_file:
+      - ./hadoop.env
+    environment:
+      SERVICE_PRECONDITION: "${NS_PREFIX}${HIVEMETASTORE:-hivemetastore}:9083"
+    depends_on:
+      - hivemetastore
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${NS_PREFIX}${HIVESERVER:-hiveserver}.rule=Host(`hiveserver.localhost`)"
+      - "traefik.http.services.${NS_PREFIX}${HIVESERVER:-hiveserver}.loadbalancer.server.port=10000"
+
+volumes:
+  hive-metastore-db:
