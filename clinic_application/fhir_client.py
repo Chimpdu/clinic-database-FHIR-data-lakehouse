@@ -15,7 +15,7 @@ _session.headers.update({
     "Accept-Encoding": "gzip",
     "Connection": "keep-alive",
 })
-JSON_HEADERS = {"Accept": "application/fhir+json", "Content-Type": "application/fhir+json"}
+
 
 # -------- tiny LRU-ish cache for read-heavy refs --------
 _cache: Dict[str, Dict[str, Any]] = {}
@@ -54,13 +54,13 @@ def get(path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     return data
 
 def post(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
-    r = _session.post(_url(path), data=json.dumps(body), headers=JSON_HEADERS, timeout=TIMEOUT, auth=Auth)
+    r = _session.post(_url(path), data=json.dumps(body), headers=HEADERS_JSON, timeout=TIMEOUT, auth=Auth)
     if not r.ok:
         _raise_with_detail(r)
     return r.json()
 
 def put(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
-    r = _session.put(_url(path), data=json.dumps(body), headers=JSON_HEADERS, timeout=TIMEOUT, auth=Auth)
+    r = _session.put(_url(path), data=json.dumps(body), headers=HEADERS_JSON, timeout=TIMEOUT, auth=Auth)
     if not r.ok:
         _raise_with_detail(r)
     return r.json()
@@ -80,43 +80,9 @@ def update(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
 def read(path: str) -> Dict[str, Any]:
     return get(path)
 
-# ====== robust create_or_update: PUT if id present, fallback to POST ======
-def create_or_update(resource: str, body: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    If body has 'id', try PUT /{resource}/{id}.
-    If the server rejects client-assigned IDs, fallback to POST without 'id'.
-    Returns the created/updated resource JSON.
-    """
-    rid = (body or {}).get("id")
-    if rid:
-        try:
-            return put(f"{resource}/{rid}", body)
-        except requests.HTTPError as e:
-            status = getattr(e.response, "status_code", None)
-            # Rejects for client-assigned ids commonly use 400/401/403/404/405/409/412/422
-            if status in (400, 401, 403, 404, 405, 409, 412, 422):
-                body2 = dict(body)
-                body2.pop("id", None)
-                return post(resource, body2)
-            raise
-    # No id -> normal POST
-    return post(resource, body)
 
-# =================== bundle iteration (compatibility) ===================
-def _iter_bundle(resource_type: str, params: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
-    params = dict(params or {})
-    params.setdefault("_summary", "data")
-    res = get(resource_type, params)
-    while True:
-        for e in res.get("entry", []) or []:
-            if "resource" in e:
-                yield e["resource"]
-        next_link = next((l.get("url") for l in res.get("link", []) if l.get("relation") == "next"), None)
-        if not next_link:
-            return
-        res = _session.get(next_link, timeout=TIMEOUT, auth=Auth).json()
-
-# =========== optimized searches with _include/_elements/_revinclude ===========
+# =========== optimized searches with _include/_elements/_revinclude, mainly for viewall function ===========
+# _include adds things this resource points to, _revinclude adds things point to this resource
 def search(resource: str, params: Dict[str, Any], *,
            elements: Optional[List[str]] = None,
            includes: Optional[List[str]] = None,
@@ -164,9 +130,9 @@ def search(resource: str, params: Dict[str, Any], *,
             _cache_put(f"{rt}/{rid}", r)
             if rt == resource.rstrip("/"):
                 all_entries.append(r)
-
+    #  inc_map stores all resouces (including the _include and _revinclude), all_enties store only the main type we searched for 
     _collect(res)
-
+    #  link to next bundle, we do this because of paging
     next_link = next((l.get("url") for l in res.get("link", []) if l.get("relation") == "next"), None)
     while next_link:
         res = _session.get(next_link, timeout=TIMEOUT, auth=Auth).json()
@@ -175,14 +141,6 @@ def search(resource: str, params: Dict[str, Any], *,
 
     return all_entries, inc_map
 
-# -------- convenience for identifier lookups --------
-def find_patient_by_identifier(identifier: str) -> Optional[str]:
-    res, _ = search("Patient", {"identifier": identifier, "_count": 1}, elements=["id"])
-    return res[0]["id"] if res else None
-
-def find_practitioner_by_identifier(identifier: str) -> Optional[str]:
-    res, _ = search("Practitioner", {"identifier": identifier, "_count": 1}, elements=["id"])
-    return res[0]["id"] if res else None
 
 # -------- Binary/Media helpers  --------
 def upload_binary_from_file(path: str, content_type: Optional[str] = None) -> str:
@@ -193,16 +151,4 @@ def upload_binary_from_file(path: str, content_type: Optional[str] = None) -> st
     res = post("Binary", {"resourceType": "Binary", "contentType": content_type, "data": data_b64})
     return res["id"]
 
-def create_media(subject_ref: str, *, binary_id: str,
-                 encounter_ref: Optional[str] = None,
-                 content_type: str = "image/jpeg") -> str:
-    media = {
-        "resourceType": "Media",
-        "status": "completed",
-        "type": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/media-type", "code": "image"}]},
-        "subject": {"reference": subject_ref},
-        "content": {"contentType": content_type, "url": f"Binary/{binary_id}"}
-    }
-    if encounter_ref:
-        media["encounter"] = {"reference": encounter_ref}
-    return post("Media", media)["id"]
+

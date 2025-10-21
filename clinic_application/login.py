@@ -23,11 +23,13 @@ def do_login():
         return
 
     if login_backend.check_user(username, password):
-        messagebox.showinfo("Login Successful", f"Welcome, {username}!")
-        set_dsn("normal")  # read-only user connection
+        role = login_backend.get_role(username)
+        is_super = role in ("super", "admin")
+        set_dsn("super" if is_super else "normal")
         root.destroy()
-        MainInterface(role="normal", login_name=username)
+        MainInterface(role=("super" if is_super else "normal"), login_name=username)
         return
+
 
     messagebox.showerror("Login Failed", "Invalid credentials. Please try again.")
 

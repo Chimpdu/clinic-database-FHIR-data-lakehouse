@@ -109,7 +109,7 @@ def _make_media_from_file(file_path: str,
 # ===================================================================
 def patient_view() -> List[Tuple]:
     rows: List[Tuple] = []
-    seen: Set[Tuple] = set()
+    seen: Set[Tuple] = set() # remove duplicates, we use compare using a set because set is hashed and should be faster than "if row not in rows"
     pats, inc = fhir.search(
         "Patient",
         {"_count": 200},
@@ -501,12 +501,7 @@ def diagnosis_update(diagn_id: str, y: str, m: str, d: str, appoint_id: Optional
 def diagnosis_delete(diagn_id: str) -> None:
     fhir.delete(f"Condition/{diagn_id}")
 
-# ===================================================================
-#                    FILE STORAGE
-# ===================================================================
-def lo_save_file(local_path: str) -> str:
-    if not os.path.isfile(local_path): raise ValueError("File not found")
-    return os.path.basename(local_path)
+
 
 # ===================================================================
 #                           CLINICS

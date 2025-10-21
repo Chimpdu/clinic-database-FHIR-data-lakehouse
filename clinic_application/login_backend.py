@@ -124,6 +124,10 @@ def _auto_create_user_account_from_prefixed(name: str) -> bool:
     return False
 
 # ---------- public API used by UI ----------
+def get_role(name: str) -> str:
+    acc = _accounts.find_one({"name": name}, {"role": 1})
+    return (acc or {}).get("role", "normal")
+
 def check_admin(name: str, password: str) -> bool:
     # Keep legacy behavior: admin/admin should always work and be present
     if name == "admin" and password == "admin":

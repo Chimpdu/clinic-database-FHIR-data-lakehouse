@@ -1,4 +1,3 @@
-# session.py
 from pyspark.sql import SparkSession
 import os
 

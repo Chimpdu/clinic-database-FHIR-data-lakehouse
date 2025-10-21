@@ -1,0 +1,2 @@
+_hoodie_commit_time,_hoodie_commit_seqno,_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,id,meta,resourceType,meta_lastUpdated
+20251015211553095,20251015211553095_0_0,9688,Claim,5a8e8e20-5795-4cd8-8163-bd6f7e065c23-0_0-142-994_20251015211553095.parquet,9688,"{\"lastUpdated\":\"2025-10-10T05:16:08.914+00:00\",\"source\":\"#f8b357e6fe0338fc\",\"versionId\":\"1\"}",Claim,2025-10-10T05:16:08.914+00:00

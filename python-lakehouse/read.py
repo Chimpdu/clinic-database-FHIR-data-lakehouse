@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
 """
-Interactive reader for Hudi datasets (no Hive required).
+Interactive reader for Hudi datasets
 
 - Scans HDFS for folders ending with "-json" that contain ".hoodie" (valid Hudi tables).
 - Lets you pick one.
 - PROMPTS for how many records to fetch.
 - Shows a preview.
 - Saves to Parquet (full schema), CSV (complex cols stringified as JSON), and JSONL.
-
-Usage:
-  ./python-examples/read.py
-  ./python-examples/read.py --name patient-json
-  ./python-examples/read.py --path hdfs://namenode:8020/fhir/patient-json
-  (In all cases, it will also prompt for a LIMIT interactively.)
 """
 
 import os
@@ -48,10 +42,6 @@ def list_hudi_datasets(max_depth=3) -> dict:
 
     candidates = [
         f"{HDFS_BASE_URI}{LAKE_BASE_PATH}".rstrip("/"),
-        f"{HDFS_BASE_URI}/fhir",
-        f"{HDFS_BASE_URI}/user",
-        f"{HDFS_BASE_URI}/tmp",
-        f"{HDFS_BASE_URI}/",
     ]
 
     seen = set()

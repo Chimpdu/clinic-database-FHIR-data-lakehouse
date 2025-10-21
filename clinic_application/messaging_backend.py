@@ -1,10 +1,10 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-
+import os
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from mongo_config import MONGODB_URI, MONGODB_DB, COLL_MESSAGES
-import backend  # lo_save_file + FHIR helpers
+import backend  #  FHIR helpers
 from login_backend import get_account_person_id, is_doctor_person, is_patient_person
 
 # ---- Mongo client / indices ----
@@ -16,6 +16,12 @@ _messages = _db[COLL_MESSAGES]
 _messages.create_index([("sender_id", ASCENDING), ("receiver_id", ASCENDING), ("created_at", DESCENDING)])
 _messages.create_index([("participants", ASCENDING), ("created_at", DESCENDING)])
 
+# ===================================================================
+#                    FILE STORAGE for messaging
+# ===================================================================
+def lo_save_file(local_path: str) -> str:
+    if not os.path.isfile(local_path): raise ValueError("File not found")
+    return os.path.basename(local_path)
 
 # ----------------- normalization helpers (single source of truth) -----------------
 def _norm_patient_id(x: Optional[str]) -> str:
@@ -102,7 +108,7 @@ def send_message(login_name: str, *, role: str,
     """
     Save a message to MongoDB.
     - Restrict pairs to doctor<->patient who share at least one Encounter
-    - Persist attachments via backend.lo_save_file (stored under ./files/)
+    - Persist attachments via lo_save_file (stored under ./files/)
     All ids persisted are **normalized bare FHIR logical ids**.
     """
     if (not text or text.strip() == "") and not file_path:
@@ -119,7 +125,7 @@ def send_message(login_name: str, *, role: str,
     # Optional file attachment
     file_url = None
     if file_path:
-        oid = backend.lo_save_file(file_path)
+        oid = lo_save_file(file_path)
         file_url = f"files/{Path(str(oid)).name}"
 
     # Store normalized ids for stable thread key
